@@ -66,7 +66,7 @@ K8S_VERSION=$(curl -fsSL \
   https://dl.k8s.io/release/stable.txt)
 
 curl -fsSL \
-  "https://dl.k8s.io/release/${K8S_VERSION}/bin/linux/${KUBECTL_ARCH}/kubectl" \
+  "https://dl.k8s.io/release/$${K8S_VERSION}/bin/linux/$${KUBECTL_ARCH}/kubectl" \
   -o /usr/local/bin/kubectl
 
 chmod 755 /usr/local/bin/kubectl
