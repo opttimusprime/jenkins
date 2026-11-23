@@ -1,46 +1,109 @@
+
 #!/bin/bash
-set -e
+set -euo pipefail
+
+# ---------------------------------------------
+# Update OS and install required packages
+# ---------------------------------------------
 
 dnf update -y
-dnf install -y java-21-amazon-corretto git wget docker awscli amazon-ssm-agent
 
-systemctl enable amazon-ssm-agent
-systemctl start amazon-ssm-agent
+dnf install -y \
+  java-21-amazon-corretto \
+  git \
+  wget \
+  curl \
+  unzip \
+  tar \
+  gzip \
+  docker \
+  awscli \
+  amazon-ssm-agent
 
-systemctl enable docker
-systemctl start docker
+# ---------------------------------------------
+# Enable AWS Systems Manager
+# ---------------------------------------------
 
-wget -O /etc/yum.repos.d/jenkins.repo https://pkg.jenkins.io/redhat-stable/jenkins.repo
-rpm --import https://pkg.jenkins.io/redhat-stable/jenkins.io-2023.key
+systemctl enable --now amazon-ssm-agent
+
+# ---------------------------------------------
+# Install and enable Docker
+# ---------------------------------------------
+
+systemctl enable --now docker
+
+# ---------------------------------------------
+# Install Jenkins LTS
+# ---------------------------------------------
+
+wget -O /etc/yum.repos.d/jenkins.repo \
+  https://pkg.jenkins.io/rpm-stable/jenkins.repo
+
+rpm --import \
+  https://pkg.jenkins.io/rpm-stable/jenkins.io-2023.key
 
 dnf install -y jenkins
 
+# ---------------------------------------------
+# Allow Jenkins to execute Docker commands
+# ---------------------------------------------
+
 usermod -aG docker jenkins
 
-mkdir -p /var/lib/jenkins/.ssh
-chmod 700 /var/lib/jenkins/.ssh
+# ---------------------------------------------
+# Install kubectl for EKS
+# ---------------------------------------------
 
-aws ssm get-parameter \
-  --name "/${project}/${environment}/jenkins/agent/private_key" \
-  --with-decryption \
-  --region "${aws_region}" \
-  --query "Parameter.Value" \
-  --output text > /var/lib/jenkins/.ssh/jenkins_agent
+ARCH=$(uname -m)
 
-aws ssm get-parameter \
-  --name "/${project}/${environment}/jenkins/agent/public_key" \
-  --region "${aws_region}" \
-  --query "Parameter.Value" \
-  --output text > /var/lib/jenkins/.ssh/jenkins_agent.pub
+case "$ARCH" in
+  x86_64) KUBECTL_ARCH="amd64" ;;
+  aarch64) KUBECTL_ARCH="arm64" ;;
+  *) echo "Unsupported architecture: $ARCH"; exit 1 ;;
+esac
 
-chmod 600 /var/lib/jenkins/.ssh/jenkins_agent
-chmod 644 /var/lib/jenkins/.ssh/jenkins_agent.pub
+K8S_VERSION=$(curl -fsSL \
+  https://dl.k8s.io/release/stable.txt)
 
-ssh-keygen -R github.com -f /var/lib/jenkins/.ssh/known_hosts 2>/dev/null || true
-ssh-keyscan -t ed25519 github.com >> /var/lib/jenkins/.ssh/known_hosts
-chmod 600 /var/lib/jenkins/.ssh/known_hosts
+curl -fsSL \
+  "https://dl.k8s.io/release/${K8S_VERSION}/bin/linux/${KUBECTL_ARCH}/kubectl" \
+  -o /usr/local/bin/kubectl
 
-chown -R jenkins:jenkins /var/lib/jenkins/.ssh
+chmod 755 /usr/local/bin/kubectl
 
-systemctl enable jenkins
-systemctl start jenkins
+# ---------------------------------------------
+# Install Helm
+# ---------------------------------------------
+
+curl -fsSL \
+  https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 \
+  -o /tmp/get-helm-3
+
+chmod 700 /tmp/get-helm-3
+/tmp/get-helm-3
+
+# ---------------------------------------------
+# Prepare Jenkins workspace
+# ---------------------------------------------
+
+mkdir -p /var/lib/jenkins/workspace
+chown -R jenkins:jenkins /var/lib/jenkins/workspace
+
+# ---------------------------------------------
+# Start Jenkins
+# ---------------------------------------------
+
+systemctl enable --now jenkins
+
+# ---------------------------------------------
+# Verify installed tools
+# ---------------------------------------------
+
+java -version
+git --version
+docker --version
+aws --version
+kubectl version --client
+helm version --short
+
+echo "Jenkins controller installation completed."

@@ -1,32 +1,54 @@
+
+# ---------------------------------------------
+# Jenkins EC2 IAM Role
+# ---------------------------------------------
+
 resource "aws_iam_role" "jenkins_role" {
   name = "${var.project}-${var.environment}-jenkins-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
+
     Statement = [{
       Effect = "Allow"
+
       Principal = {
         Service = "ec2.amazonaws.com"
       }
+
       Action = "sts:AssumeRole"
     }]
   })
+
+  tags = {
+    Name = "${var.project}-${var.environment}-jenkins-role"
+  }
 }
+
+# ---------------------------------------------
+# ECR Permissions
+# Docker image push and pull
+# ---------------------------------------------
 
 resource "aws_iam_role_policy_attachment" "ecr" {
   role       = aws_iam_role.jenkins_role.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryPowerUser"
 }
 
-resource "aws_iam_role_policy_attachment" "eks" {
-  role       = aws_iam_role.jenkins_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
-}
+# ---------------------------------------------
+# AWS Systems Manager
+# EC2 administration through Session Manager
+# ---------------------------------------------
 
 resource "aws_iam_role_policy_attachment" "ssm" {
   role       = aws_iam_role.jenkins_role.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
+
+# ---------------------------------------------
+# EKS Cluster Discovery
+# Required for aws eks update-kubeconfig
+# ---------------------------------------------
 
 resource "aws_iam_role_policy" "jenkins_eks_describe" {
   name = "${var.project}-${var.environment}-jenkins-eks-describe-policy"
@@ -34,50 +56,24 @@ resource "aws_iam_role_policy" "jenkins_eks_describe" {
 
   policy = jsonencode({
     Version = "2012-10-17"
+
     Statement = [
       {
         Effect = "Allow"
+
         Action = [
-          "eks:DescribeCluster",
-          "eks:ListClusters"
+          "eks:DescribeCluster"
         ]
-        Resource = "*"
+
+        Resource = "arn:aws:eks:${var.aws_region}:${data.aws_caller_identity.current.account_id}:cluster/${var.project}-${var.environment}-eks"
       }
     ]
   })
 }
 
-resource "aws_iam_role_policy" "ssm_parameter_store" {
-  name = "${var.project}-${var.environment}-jenkins-ssm-parameter-store-policy"
-  role = aws_iam_role.jenkins_role.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      # Jenkins Controller reads agent private key
-      {
-        Effect = "Allow"
-        Action = [
-          "ssm:GetParameter",
-          "ssm:GetParameters"
-        ]
-        Resource = [
-          "arn:aws:ssm:${var.aws_region}:*:parameter/${var.project}/${var.environment}/jenkins/agent/private_key",
-          "arn:aws:ssm:${var.aws_region}:*:parameter/${var.project}/${var.environment}/jenkins/agent/public_key"
-        ]
-      },
-
-      # Terraform can create/update Jenkins parameters
-      {
-        Effect = "Allow"
-        Action = [
-          "ssm:PutParameter"
-        ]
-        Resource = "arn:aws:ssm:${var.aws_region}:*:parameter/${var.project}/${var.environment}/jenkins/*"
-      }
-    ]
-  })
-}
+# ---------------------------------------------
+# Jenkins EC2 Instance Profile
+# ---------------------------------------------
 
 resource "aws_iam_instance_profile" "jenkins" {
   name = "${var.project}-${var.environment}-jenkins-profile"
