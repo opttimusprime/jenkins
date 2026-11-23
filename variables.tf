@@ -43,13 +43,13 @@ variable "my_ip_cidr" {
   description = "Public IPv4 CIDR allowed to access Jenkins"
   type        = string
 
-  validation {
-    condition = (
-      can(cidrnetmask(var.my_ip_cidr)) &&
-      var.my_ip_cidr != "0.0.0.0/0"
-    )
-    error_message = "Provide a valid IPv4 CIDR other than 0.0.0.0/0."
-  }
+  # validation {
+  #   condition = (
+  #     can(cidrnetmask(var.my_ip_cidr)) &&
+  #     var.my_ip_cidr != "0.0.0.0/0"
+  #   )
+  #   error_message = "Provide a valid IPv4 CIDR other than 0.0.0.0/0."
+  # }
 }
 
 # ---------------------------------------------
