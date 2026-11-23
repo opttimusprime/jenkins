@@ -11,7 +11,6 @@ dnf install -y \
   java-21-amazon-corretto \
   git \
   wget \
-  curl \
   unzip \
   tar \
   gzip \
