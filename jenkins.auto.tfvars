@@ -3,7 +3,7 @@ project     = "roboshop"
 environment = "dev"
 
 key_name   = "jenkinsKeyPair"
-my_ip_cidr = "110.235.236.43/32"
+my_ip_cidr = "0.0.0.0/0"
 
 jenkins_dns_name = "jenkins.optimusprime.uno"
 
